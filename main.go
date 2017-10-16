@@ -1,0 +1,72 @@
+package main
+
+import (
+	"net/http"
+	"net/http/cookiejar"
+)
+
+import (
+	"encoding/base64"
+	"log"
+	"os"
+	"fmt"
+	"encoding/json"
+)
+
+// What the config file looks like
+type Config struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Serverurl string `json:"serverurl"`
+}
+var cfg Config
+
+// Read username/password/url from config-file & return
+func LoadConfiguration(file string) Config {
+	var config Config
+	configFile, err := os.Open(file)
+	defer configFile.Close()
+	if err != nil {
+		fmt.Println(err.Error())
+		}
+	jsonParser := json.NewDecoder(configFile)
+	jsonParser.Decode(&config)
+	return config
+}
+
+// Return base64-encoded authorization-string
+func basicAuth(username, password string) string {
+	  auth := username + ":" + password
+  return base64.StdEncoding.EncodeToString([]byte(auth))
+}
+
+// handle server redirect & resend user/password
+func redirectPolicyFunc(req *http.Request, via []*http.Request) error {
+	  req.SetBasicAuth(cfg.Username,cfg.Password)
+  return nil
+}
+
+func main() {
+
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client {
+	  Jar: jar,
+	  CheckRedirect: redirectPolicyFunc,
+	}
+
+	cfg = LoadConfiguration("/Users/jps/auth.txt")
+	//println(cfg.Username, cfg.Password, cfg.Serverurl)
+
+	req, err := http.NewRequest("GET", cfg.Serverurl + "/JSSResource/computers", nil)
+    req.Header.Add("Authorization", "Basic " + basicAuth(cfg.Username, cfg.Password))
+
+    resp, err := client.Do(req)
+	if err != nil {
+	  	log.Fatal("Oh, crap; done screwed up, on the Casper request")
+	} else {
+		println("Get status was: ", resp.Status)
+	}
+
+	println(resp.Body)
+
+}
