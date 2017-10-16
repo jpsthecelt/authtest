@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"encoding/json"
 	"flag"
+	"strings"
+	"io/ioutil"
 )
 
 // What the config file looks like
@@ -57,6 +59,7 @@ func main() {
 
 	// Assumes that the first argument is '-auth FQDN', no '~' and uses '/'s vs. '\'s
   	aPtr := flag.String("auth", ".", "an FQDN")
+	fPtr := flag.String("format", "xml", "either xml or json")
 	flag.Parse()
 
   	if len(*aPtr) > 0 {
@@ -65,19 +68,27 @@ func main() {
   		log.Fatal("\nERROR** - No auth file parameter on command-line>")
   	}
 
+  	outputFormat := "text/xml"
+	if (len(*fPtr) > 0) && (strings.Contains(*fPtr,"json")) {
+		outputFormat = "application/json"
+	}
+
 	cfg = LoadConfiguration(*aPtr)
 	//println(cfg.Username, cfg.Password, cfg.Serverurl)
 
 	req, err := http.NewRequest("GET", cfg.Serverurl + "/JSSResource/computers", nil)
     req.Header.Add("Authorization", "Basic " + basicAuth(cfg.Username, cfg.Password))
+    req.Header.Add("accept",outputFormat)
 
     resp, err := client.Do(req)
 	if err != nil {
 	  	log.Fatal("Oh, crap; done screwed up on the Casper request...")
 	} else {
 		println("Get status was: ", resp.Status)
+		if resp.StatusCode == 200 { // OK
+			bodyBytes, _ := ioutil.ReadAll(resp.Body)
+			bodyString := string(bodyBytes)
+			println(bodyString)
+		}
 	}
-
-	println(resp.Body)
-
 }
