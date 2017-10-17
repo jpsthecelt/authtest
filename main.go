@@ -14,7 +14,11 @@ import (
 	"flag"
 	"strings"
 	"io/ioutil"
+	"io"
 )
+
+// Call this routine (for example) as:
+//      ./authtest -auth ~/auth.txt -format json -computername A122758 -out savedOutput.txt
 
 // What the config file looks like
 type Config struct {
@@ -49,6 +53,21 @@ func redirectPolicyFunc(req *http.Request, via []*http.Request) error {
   return nil
 }
 
+func fileOutput(filepath, s string) error {
+	fo, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer fo.Close()
+
+	_, err = io.Copy(fo, strings.NewReader(s))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func main() {
 
 	jar, _ := cookiejar.New(nil)
@@ -60,6 +79,8 @@ func main() {
 	// Assumes that the first argument is '-auth FQDN', no '~' and uses '/'s vs. '\'s
   	aPtr := flag.String("auth", ".", "an FQDN")
 	fPtr := flag.String("format", "xml", "either xml or json")
+	cPtr := flag.String("computername", "A123456", "name of desired computer")
+	oPtr := flag.String("out", "savedfile.txt", "name of desired output-file")
 	flag.Parse()
 
   	if len(*aPtr) > 0 {
@@ -67,6 +88,17 @@ func main() {
   	} else {
   		log.Fatal("\nERROR** - No auth file parameter on command-line>")
   	}
+
+  	if len(*cPtr) > 0 {
+  		fmt.Println("Finding history of", *cPtr, "...")
+  	} else {
+  		log.Fatal("\nERROR** - No indicated computer on command-line>")
+  	}
+
+  	sendOut := false
+	if len(*oPtr) > 0 {
+	   sendOut = true
+	}
 
   	outputFormat := "text/xml"
 	if (len(*fPtr) > 0) && (strings.Contains(*fPtr,"json")) {
@@ -76,7 +108,7 @@ func main() {
 	cfg = LoadConfiguration(*aPtr)
 	//println(cfg.Username, cfg.Password, cfg.Serverurl)
 
-	req, err := http.NewRequest("GET", cfg.Serverurl + "/JSSResource/computers", nil)
+	req, err := http.NewRequest("GET", cfg.Serverurl + "/JSSResource/computerhistory/name/"+*cPtr, nil)
     req.Header.Add("Authorization", "Basic " + basicAuth(cfg.Username, cfg.Password))
     req.Header.Add("accept",outputFormat)
 
@@ -89,6 +121,12 @@ func main() {
 			bodyBytes, _ := ioutil.ReadAll(resp.Body)
 			bodyString := string(bodyBytes)
 			println(bodyString)
+			if sendOut {
+				ok := fileOutput(*oPtr, bodyString )
+				if ok != nil {
+					log.Fatal("Cant write to specified output file")
+				}
+			}
 		}
 	}
 }
